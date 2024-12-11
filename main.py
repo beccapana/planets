@@ -20,7 +20,7 @@ def random_color():
 
 def distance(x1, y1, x2, y2):
     """Возвращает расстояние между двумя точками."""
-    return math.sqrt(square(x2 - x1) + square(y2 - y1))
+    return math.sqrt(square(x2 - x1) + square(x2 - x1))
 
 # Инициализация pygame
 pygame.init()
@@ -30,6 +30,8 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Planets Simulation")
 
 # Задание планет и их свойств
+
+
 planets = [
     {
         "pos": [100, 20],
@@ -54,11 +56,29 @@ planets = [
     }
 ]
 
-# Вспомогательные переменные
-selected_planet = None
-mouse_attract = [False, False, False]
+# Управляющие объекты и параметры
+star = None  # Звезда
+black_hole = None  # Черная дыра
+current_mode = 1  # Режим: 1 - зажатие мыши, 2 - звезда, 3 - черная дыра
 running = True
 clock = pygame.time.Clock()
+
+def create_star():
+    """Создание звезды."""
+    return {
+        "pos": list(pygame.mouse.get_pos()),
+        "radius": 30,
+        "color": (255, 255, 0)
+    }
+
+def create_black_hole():
+    """Создание черной дыры."""
+    return {
+        "pos": list(pygame.mouse.get_pos()),
+        "radius": 40,
+        "color": (0, 0, 0),
+        "event_horizon": 100  # Горизонт событий
+    }
 
 # Главный цикл
 while running:
@@ -73,43 +93,54 @@ while running:
     mouse_pressed = pygame.mouse.get_pressed()
     mouse_pos = pygame.mouse.get_pos()
 
-    # Управление выделением планет и их перемещением
-    for i in range(NUM_PLANETS):
-        if keys[pygame.K_1 + i]:
-            selected_planet = i
-            if mouse_pressed[0]:
-                mouse_attract[i] = True
-            if keys[pygame.K_q]:
-                planets[i]["pos"] = list(mouse_pos)
-                planets[i]["trail"] = []  # Сброс следа
-        else:
-            mouse_attract[i] = False
+    # Управление режимами
+    if keys[pygame.K_1]:
+        current_mode = 1
+        star = None
+        black_hole = None
+    elif keys[pygame.K_2]:
+        current_mode = 2
+        if not star:
+            star = create_star()
+    elif keys[pygame.K_3]:
+        current_mode = 3
+        if not black_hole:
+            black_hole = create_black_hole()
 
-    # Обновление скорости планет на основе гравитационного взаимодействия
-    if mouse_pressed[2]:
-        for i, planet_a in enumerate(planets):
-            force_x, force_y = 0, 0
+    # Режим 1: Притяжение к мыши с зажатой кнопкой
+    if current_mode == 1 and mouse_pressed[2]:
+        for planet in planets:
+            dist = distance(*planet["pos"], *mouse_pos) / 100
+            if dist > 1.55:
+                force = SPEED / square(dist)
+                planet["velocity"][0] += force * (mouse_pos[0] - planet["pos"][0]) / dist
+                planet["velocity"][1] += force * (mouse_pos[1] - planet["pos"][1]) / dist
 
-            # Гравитация между планетами
-            for j, planet_b in enumerate(planets):
-                if i != j:
-                    dist = distance(*planet_a["pos"], *planet_b["pos"]) / 100
-                    if dist > 1.55:
-                        force = SPEED / square(dist)
-                        force_x += force * (planet_b["pos"][0] - planet_a["pos"][0]) / dist
-                        force_y += force * (planet_b["pos"][1] - planet_a["pos"][1]) / dist
+    # Режим 2: Звезда с притяжением
+    if current_mode == 2 and star:
+        star["pos"] = mouse_pos  # Звезда следует за мышью
+        for planet in planets:
+            dist = distance(*planet["pos"], *star["pos"]) / 100
+            if dist > 1.55:
+                force = SPEED / square(dist)
+                planet["velocity"][0] += force * (star["pos"][0] - planet["pos"][0]) / dist
+                planet["velocity"][1] += force * (star["pos"][1] - planet["pos"][1]) / dist
+        pygame.draw.circle(screen, star["color"], star["pos"], star["radius"])
 
-            # Притяжение к мыши, если активно
-            if mouse_attract[i]:
-                dist = distance(*planet_a["pos"], *mouse_pos) / 100
-                if dist > 1.55:
-                    force = SPEED / square(dist)
-                    force_x += force * (mouse_pos[0] - planet_a["pos"][0]) / dist
-                    force_y += force * (mouse_pos[1] - planet_a["pos"][1]) / dist
-
-            # Обновление скорости
-            planet_a["velocity"][0] += force_x
-            planet_a["velocity"][1] += force_y
+    # Режим 3: Черная дыра
+    if current_mode == 3 and black_hole:
+        black_hole["pos"] = mouse_pos  # Черная дыра следует за мышью
+        for planet in planets:
+            dist = distance(*planet["pos"], *black_hole["pos"])
+            if dist < black_hole["event_horizon"]:
+                planets.remove(planet)  # Планета поглощена
+                continue
+            dist_scaled = dist / 100
+            if dist_scaled > 1.55:
+                force = SPEED * 5 / square(dist_scaled)  # Усиленное притяжение
+                planet["velocity"][0] += force * (black_hole["pos"][0] - planet["pos"][0]) / dist
+                planet["velocity"][1] += force * (black_hole["pos"][1] - planet["pos"][1]) / dist
+        pygame.draw.circle(screen, black_hole["color"], black_hole["pos"], black_hole["radius"])
 
     # Обновление позиций планет
     for planet in planets:
