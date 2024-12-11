@@ -20,7 +20,7 @@ def random_color():
 
 def distance(x1, y1, x2, y2):
     """Возвращает расстояние между двумя точками."""
-    return math.sqrt(square(x2 - x1) + square(x2 - x1))
+    return math.sqrt(square(x2 - x1) + square(y2 - y1))
 
 # Инициализация pygame
 pygame.init()
@@ -29,10 +29,8 @@ pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Planets Simulation")
 
-# Задание планет и их свойств
-
-
-planets = [
+# Задание начальных планет и их свойств
+initial_planets = [
     {
         "pos": [100, 20],
         "radius": 20,
@@ -48,13 +46,16 @@ planets = [
         "trail": []
     },
     {
-        "pos": [100, 200],
+        "pos": [100, 300],
         "radius": 20,
         "color": random_color(),
         "velocity": [0, 0],
         "trail": []
     }
 ]
+
+# Создание копии начальных данных планет
+planets = [planet.copy() for planet in initial_planets]
 
 # Управляющие объекты и параметры
 star = None  # Звезда
@@ -79,6 +80,13 @@ def create_black_hole():
         "color": (0, 0, 0),
         "event_horizon": 100  # Горизонт событий
     }
+
+def reset_planets():
+    """Сбрасывает планеты к начальному состоянию."""
+    global planets, star, black_hole
+    planets = [planet.copy() for planet in initial_planets]
+    star = None
+    black_hole = None
 
 # Главный цикл
 while running:
@@ -106,6 +114,8 @@ while running:
         current_mode = 3
         if not black_hole:
             black_hole = create_black_hole()
+    elif keys[pygame.K_r]:  # Возврат всех планет
+        reset_planets()
 
     # Режим 1: Притяжение к мыши с зажатой кнопкой
     if current_mode == 1 and mouse_pressed[2]:
