@@ -7,9 +7,9 @@ WIDTH, HEIGHT = 1920, 1080  # Полный размер экрана
 SPEED = 0.1
 NUM_PLANETS = 5
 TRAIL_LENGTH = 200
+G_CONSTANT = 5.0  # Усиленная гравитационная постоянная для взаимодействия планет
 
 # Функции
-
 def square(value):
     """Возвращает квадрат числа."""
     return value ** 2
@@ -46,6 +46,7 @@ def create_random_planet():
         "radius": 20,
         "color": random_color(),
         "velocity": [0, 0],
+        "mass": random.uniform(1, 5),  # Масса планеты
         "trail": []
     }
 
@@ -55,6 +56,14 @@ def reset_planets():
     planets = [create_random_planet() for _ in range(NUM_PLANETS)]
     star = None
     black_hole = None
+
+def draw_black_hole_effect(black_hole, screen):
+    """Рисует эффект гравитации вокруг черной дыры."""
+    for i in range(1, 20):
+        alpha = max(0, 255 - i * 12)
+        color = (112, 128, 144, alpha)
+        radius = black_hole["radius"] + i * 5
+        pygame.draw.circle(screen, (112, 128, 144), black_hole["pos"], radius, width=1)
 
 # Инициализация pygame
 pygame.init()
@@ -125,17 +134,42 @@ while running:
     # Режим 3: Черная дыра
     if current_mode == 3 and black_hole:
         black_hole["pos"] = mouse_pos
-        for planet in planets:
-            dist = distance(*planet["pos"], *black_hole["pos"])
+        draw_black_hole_effect(black_hole, screen)
+        for planet in planets[:]:
+            dx, dy = black_hole["pos"][0] - planet["pos"][0], black_hole["pos"][1] - planet["pos"][1]
+            dist = math.sqrt(dx**2 + dy**2)
+
             if dist < black_hole["event_horizon"]:
-                planets.remove(planet)
-                continue
+                # Эффект приливных сил
+                planet["radius"] -= 0.2
+                if planet["radius"] <= 0:
+                    planets.remove(planet)
+                    continue
+
             dist_scaled = dist / 100
             if dist_scaled > 1.55:
                 force = SPEED * 5 / square(dist_scaled)
-                planet["velocity"][0] += force * (black_hole["pos"][0] - planet["pos"][0]) / dist
-                planet["velocity"][1] += force * (black_hole["pos"][1] - planet["pos"][1]) / dist
-        pygame.draw.circle(screen, black_hole["color"], black_hole["pos"], black_hole["radius"])
+                planet["velocity"][0] += force * dx / dist
+                planet["velocity"][1] += force * dy / dist
+
+            # Искривление траектории: гравитационный манёвр
+            angle = math.atan2(dy, dx)
+            velocity_angle = math.atan2(planet["velocity"][1], planet["velocity"][0])
+            angle_diff = angle - velocity_angle
+            planet["velocity"][0] += G_CONSTANT * math.sin(angle_diff)
+            planet["velocity"][1] += G_CONSTANT * math.cos(angle_diff)
+
+    # Взаимодействие планет друг с другом
+    for i, planet1 in enumerate(planets):
+        for planet2 in planets[i + 1:]:
+            dx, dy = planet2["pos"][0] - planet1["pos"][0], planet2["pos"][1] - planet1["pos"][1]
+            dist = distance(*planet1["pos"], *planet2["pos"])
+            if dist > 0 and dist < 200:  # Условие для гравитационного взаимодействия
+                force = G_CONSTANT * planet1["mass"] * planet2["mass"] / square(dist)
+                planet1["velocity"][0] += force * dx / dist / planet1["mass"]
+                planet1["velocity"][1] += force * dy / dist / planet1["mass"]
+                planet2["velocity"][0] -= force * dx / dist / planet2["mass"]
+                planet2["velocity"][1] -= force * dy / dist / planet2["mass"]
 
     # Обновление позиций планет
     for planet in planets:
@@ -150,7 +184,7 @@ while running:
         for point in planet["trail"]:
             pygame.draw.circle(screen, (255, 255, 255), (int(point[0]), int(point[1])), 3)
 
-        pygame.draw.circle(screen, planet["color"], (int(planet["pos"][0]), int(planet["pos"][1])), planet["radius"])
+        pygame.draw.circle(screen, planet["color"], (int(planet["pos"][0]), int(planet["pos"][1])), int(planet["radius"]))
 
     pygame.display.flip()
     clock.tick(60)
